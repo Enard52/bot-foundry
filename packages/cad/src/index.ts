@@ -40,3 +40,6 @@ export interface Kernel {
 }
 
 export { createKernel } from './kernel.ts';
+export type { CadKernel, KernelOptions, KernelStats } from './kernel.ts';
+export { sampleDesign } from './samples.ts';
+export { circleLoop, circleProfile, polygonLoop, rectLoop, rectProfile } from './sketch.ts';
