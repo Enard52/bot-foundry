@@ -11,6 +11,7 @@
   },
   "scripts": {
     "build": "tsc -b",
+    "build:wasm": "node native/build.mjs",
     "bench": "node --experimental-strip-types bench/step.ts"
   },
   "dependencies": {

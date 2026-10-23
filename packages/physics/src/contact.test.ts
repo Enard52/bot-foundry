@@ -1,12 +1,17 @@
 import type { Quat } from '@botfoundry/model';
-import { describe, expect, it } from 'vitest';
-import { AT_ORIGIN, boxPart, model } from './fixtures.ts';
-import { createWorld } from './world.ts';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { AT_ORIGIN, BACKENDS, boxPart, model } from './fixtures.ts';
+import type { WorldOptions } from './index.ts';
+import { loadWasmSolver } from './wasm.ts';
+import { createWorld as create } from './world.ts';
 
 const yaw = (a: number): Quat => [0, Math.sin(a / 2), 0, Math.cos(a / 2)];
 const distance = (a: readonly number[], b: readonly number[]) => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!);
 
-describe('contact', () => {
+describe.each(BACKENDS)('contact (%s backend)', (backend) => {
+  beforeAll(loadWasmSolver);
+  const createWorld = (options: WorldOptions = {}) => create({ ...options, backend });
+
   it('a box resting on the ground drifts under 1 mm over 5 s', () => {
     const world = createWorld();
     world.addGround();

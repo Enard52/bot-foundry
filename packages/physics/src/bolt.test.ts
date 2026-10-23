@@ -1,24 +1,29 @@
 import { boltRating } from '@botfoundry/model';
-import { describe, expect, it } from 'vitest';
-import { AT_ORIGIN, bolt, boxPart, model } from './fixtures.ts';
-import { createWorld } from './world.ts';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { AT_ORIGIN, BACKENDS, bolt, boxPart, model } from './fixtures.ts';
+import type { WorldOptions } from './index.ts';
+import { loadWasmSolver } from './wasm.ts';
+import { createWorld as create } from './world.ts';
 
 const G = 9.81;
 
-/** A mass hanging from a static anchor by one M5 8.8 bolt with a vertical axis. */
-function hanging(mass: number) {
-  const world = createWorld();
-  world.addRobot(
-    model('hang', [
-      boxPart('anchor', [0.1, 0.1, 0.1], [0, 1, 0], { mass: 0 }),
-      boxPart('weight', [0.1, 0.1, 0.1], [0, 0.89, 0], { mass }),
-    ], [bolt('m5', 'anchor', 'weight', [0, 0.945, 0], [0, 1, 0])]),
-    AT_ORIGIN,
-  );
-  return world;
-}
+describe.each(BACKENDS)('bolts (%s backend)', (backend) => {
+  beforeAll(loadWasmSolver);
+  const createWorld = (options: WorldOptions = {}) => create({ ...options, backend });
 
-describe('bolts', () => {
+  /** A mass hanging from a static anchor by one M5 8.8 bolt with a vertical axis. */
+  function hanging(mass: number) {
+    const world = createWorld();
+    world.addRobot(
+      model('hang', [
+        boxPart('anchor', [0.1, 0.1, 0.1], [0, 1, 0], { mass: 0 }),
+        boxPart('weight', [0.1, 0.1, 0.1], [0, 0.89, 0], { mass }),
+      ], [bolt('m5', 'anchor', 'weight', [0, 0.945, 0], [0, 1, 0])]),
+      AT_ORIGIN,
+    );
+    return world;
+  }
+
   it('a mass hanging from one M5 bolt reads axial force m·g within 1 %', () => {
     // this pins the solver's multiplier-to-newton convention: AVBD's λ is already a force
     for (const mass of [0.2, 10, 500]) {

@@ -1,6 +1,7 @@
 import type { Body } from './body.ts';
 import type { Hull } from './hull.ts';
 import { rotate, vec3 } from './math.ts';
+import { pairKey } from './robot.ts';
 
 // Narrowphase: convex hull vs convex hull by the separating-axis test with face clipping
 // (D. Gregorius, "The Separating Axis Test between Convex Polyhedra", GDC 2013), and hull vs the
@@ -417,4 +418,80 @@ export function collideGround(A: Body, ia: number, margin: number, out: ContactO
   out.normal[2] = 0;
   // the ground is the reference surface (normal +y); the hull's vertices are incident on A
   return emitReduced(out, 0, 1, 0, false, 0);
+}
+
+/**
+ * Broadphase and narrowphase for a whole world: sweep-and-prune along the axis where the bodies
+ * spread most (bounding spheres), then SAT per hull pair and hull vs ground. `emit` is called for
+ * every hull pair in contact, in a fixed order, with the result in `out`. Pairs that share a live
+ * connection (counted in `linked` by pairKey) do not collide.
+ */
+export function collideAll(
+  bodyList: readonly Body[],
+  ground: Body | null,
+  linked: ReadonlyMap<number, number>,
+  margin: number,
+  stamp: number,
+  out: ContactOut,
+  emit: (A: Body, ha: number, B: Body, hb: number) => void,
+): void {
+  const bodies = bodyList.filter((b) => b.hulls.length > 0);
+  const axis = spreadAxis(bodies);
+  const reach = (b: Body) => b.radius + margin;
+  bodies.sort((u, v) => u.pos[axis]! - reach(u) - (v.pos[axis]! - reach(v)) || u.index - v.index);
+
+  for (let i = 0; i < bodies.length; i++) {
+    const A0 = bodies[i]!;
+    const maxX = A0.pos[axis]! + reach(A0);
+    for (let j = i + 1; j < bodies.length; j++) {
+      const B0 = bodies[j]!;
+      if (B0.pos[axis]! - reach(B0) > maxX) break;
+      if (A0.isStatic && B0.isStatic) continue;
+      const r = A0.radius + B0.radius + margin;
+      const dx = A0.pos[0]! - B0.pos[0]!, dy = A0.pos[1]! - B0.pos[1]!, dz = A0.pos[2]! - B0.pos[2]!;
+      if (dx * dx + dy * dy + dz * dz > r * r) continue;
+      if ((linked.get(pairKey(A0, B0)) ?? 0) > 0) continue;
+      const [A, B] = A0.index < B0.index ? [A0, B0] : [B0, A0];
+      refreshWorldHulls(A, stamp);
+      refreshWorldHulls(B, stamp);
+      for (let ha = 0; ha < A.hulls.length; ha++) {
+        for (let hb = 0; hb < B.hulls.length; hb++) {
+          if (collideHulls(A, ha, B, hb, margin, out) === 0) continue;
+          emit(A, ha, B, hb);
+        }
+      }
+    }
+  }
+
+  if (ground) {
+    for (const A of bodyList) {
+      if (A.isStatic || A.hulls.length === 0 || A.pos[1]! - A.radius > margin) continue;
+      refreshWorldHulls(A, stamp);
+      for (let ha = 0; ha < A.hulls.length; ha++) {
+        if (collideGround(A, ha, margin, out) === 0) continue;
+        emit(A, ha, ground, 0);
+      }
+    }
+  }
+}
+
+/** The axis (0, 1, 2) along which body centres have the largest variance. */
+function spreadAxis(bodies: Body[]): number {
+  const n = bodies.length;
+  if (n < 2) return 0;
+  let best = 0, bestVar = -1;
+  for (let k = 0; k < 3; k++) {
+    let sum = 0, sum2 = 0;
+    for (const b of bodies) {
+      const x = b.pos[k]!;
+      sum += x;
+      sum2 += x * x;
+    }
+    const v = sum2 / n - (sum / n) ** 2;
+    if (v > bestVar) {
+      bestVar = v;
+      best = k;
+    }
+  }
+  return best;
 }

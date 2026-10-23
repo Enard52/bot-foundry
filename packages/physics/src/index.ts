@@ -8,6 +8,11 @@ export interface WorldOptions {
   /** solver iterations per substep; default 4 */
   iterations?: number;
   gravity?: V3;
+  /**
+   * 'ts' (default) runs the reference solver in TypeScript; 'wasm' runs the same solver in
+   * WebAssembly, several times faster and bit-identical, after `await loadWasmSolver()`.
+   */
+  backend?: 'ts' | 'wasm';
 }
 
 export interface BodyState {
@@ -47,3 +52,4 @@ export interface World {
 }
 
 export { createWorld } from './world.ts';
+export { loadWasmSolver } from './wasm.ts';

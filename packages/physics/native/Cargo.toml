@@ -1,0 +1,19 @@
+[package]
+name = "botfoundry-solver"
+version = "0.0.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "WebAssembly core of the Bot Foundry rigid-body solver."
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+strip = true

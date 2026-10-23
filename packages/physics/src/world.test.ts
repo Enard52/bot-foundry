@@ -1,37 +1,42 @@
 import type { Quat } from '@botfoundry/model';
-import { describe, expect, it } from 'vitest';
-import { AT_ORIGIN, bolt, boxPart, model } from './fixtures.ts';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { AT_ORIGIN, BACKENDS, bolt, boxPart, model } from './fixtures.ts';
 import { Fnv64 } from './hash.ts';
 import { buildHull } from './hull.ts';
+import type { WorldOptions } from './index.ts';
 import { datan2 } from './math.ts';
-import { createWorld } from './world.ts';
+import { loadWasmSolver } from './wasm.ts';
+import { createWorld as create } from './world.ts';
 
-function arena(tilt = 0) {
-  const world = createWorld();
-  world.addGround();
-  for (let i = 0; i < 12; i++) {
-    const a = 0.37 * i + tilt;
-    const rotation: Quat = [Math.sin(a / 2) * 0.6, Math.sin(a / 2) * 0.8, 0, Math.cos(a / 2)];
-    world.addRobot(model(`box${i}`, [boxPart('b', [0.1, 0.08, 0.12], [0, 0, 0])]), {
-      position: [0.06 * (i % 4) - 0.1, 0.1 + 0.12 * Math.floor(i / 4), 0.03 * (i % 3)],
-      rotation,
-    });
+describe.each(BACKENDS)('world (%s backend)', (backend) => {
+  beforeAll(loadWasmSolver);
+  const createWorld = (options: WorldOptions = {}) => create({ ...options, backend });
+
+  function arena(tilt = 0) {
+    const world = createWorld();
+    world.addGround();
+    for (let i = 0; i < 12; i++) {
+      const a = 0.37 * i + tilt;
+      const rotation: Quat = [Math.sin(a / 2) * 0.6, Math.sin(a / 2) * 0.8, 0, Math.cos(a / 2)];
+      world.addRobot(model(`box${i}`, [boxPart('b', [0.1, 0.08, 0.12], [0, 0, 0])]), {
+        position: [0.06 * (i % 4) - 0.1, 0.1 + 0.12 * Math.floor(i / 4), 0.03 * (i % 3)],
+        rotation,
+      });
+    }
+    world.addRobot(
+      model('bot', [
+        boxPart('chassis', [0.4, 0.05, 0.3], [0, 0.4, 0]),
+        boxPart('arm', [0.3, 0.03, 0.03], [0.3, 0.45, 0]),
+        boxPart('bracket', [0.04, 0.04, 0.04], [-0.1, 0.445, 0.1], { mass: 0.05 }),
+      ], [
+        { kind: 'joint', id: 'hinge', joint: 'hinge', a: 'chassis', b: 'arm', anchor: [0.15, 0.45, 0], axis: [0, 0, 1], limits: [-1, 1] },
+        bolt('m5', 'chassis', 'bracket', [-0.1, 0.425, 0.1], [0, 1, 0]),
+      ]),
+      { position: [0.5, 0, 0], rotation: [0, 0, 0, 1] },
+    );
+    return world;
   }
-  world.addRobot(
-    model('bot', [
-      boxPart('chassis', [0.4, 0.05, 0.3], [0, 0.4, 0]),
-      boxPart('arm', [0.3, 0.03, 0.03], [0.3, 0.45, 0]),
-      boxPart('bracket', [0.04, 0.04, 0.04], [-0.1, 0.445, 0.1], { mass: 0.05 }),
-    ], [
-      { kind: 'joint', id: 'hinge', joint: 'hinge', a: 'chassis', b: 'arm', anchor: [0.15, 0.45, 0], axis: [0, 0, 1], limits: [-1, 1] },
-      bolt('m5', 'chassis', 'bracket', [-0.1, 0.425, 0.1], [0, 1, 0]),
-    ]),
-    { position: [0.5, 0, 0], rotation: [0, 0, 0, 1] },
-  );
-  return world;
-}
 
-describe('world', () => {
   it('two worlds with identical inputs hash identically after 2000 steps', () => {
     const a = arena(), b = arena();
     for (let i = 0; i < 2000; i++) {

@@ -80,3 +80,6 @@ export function model(name: string, parts: PhysPart[], connections: Connection[]
 }
 
 export const AT_ORIGIN = { position: [0, 0, 0] as V3, rotation: [0, 0, 0, 1] as const };
+
+/** Both solver backends; tests run once per backend after `await loadWasmSolver()`. */
+export const BACKENDS = ['ts', 'wasm'] as const;

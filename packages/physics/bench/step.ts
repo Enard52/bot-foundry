@@ -1,113 +1,24 @@
-// Substep cost of the solver core. Run from packages/physics:
+// Substep cost of the solver core, both backends side by side. Run from packages/physics:
 //   node --experimental-strip-types bench/step.ts
-// Every scenario runs at dt = 1/1000 s with 4 iterations and reports the mean wall time per
-// substep after a warm-up. Gate S1: two robots' worth (about 300 bodies and 1000 constraints)
-// under 0.5 ms per substep.
+// Every scenario runs at dt = 1/1000 s with 4 iterations. Each backend builds its own world, steps
+// it through the same warm-up (which also lets V8 optimise both), then reports the mean wall time
+// per substep. Loading and compiling the WebAssembly module happens once before any timing.
+// Gate S1: two robots (about 300 bodies and 1,000 bolts, on the ground) under 0.5 ms per substep,
+// judged on two scenarios, each run 7 times on fresh worlds with the verdict on the median:
+//   resting  the robots standing on the ground, timed over substeps 200-1200
+//   dynamic  the same robots dropped from 10 cm, timed over substeps 100-500 (the plates reach the
+//            ground at about substep 170, then settle)
 
-import type { Connection, PhysPart } from '@botfoundry/model';
-import { AT_ORIGIN, bolt, boxPart, model } from '../src/fixtures.ts';
-import type { World } from '../src/index.ts';
-import { createWorld } from '../src/world.ts';
+import { availableParallelism, loadavg } from 'node:os';
+import type { WorldOptions } from '../src/index.ts';
+import { chains, pile, robots, type Scenario } from '../src/scenarios.ts';
+import { loadWasmSolver } from '../src/wasm.ts';
 
-interface Scenario {
-  name: string;
-  build(): World;
-  bodies: number;
-  constraints: number;
-}
+const BACKENDS: NonNullable<WorldOptions['backend']>[] = ['ts', 'wasm'];
+const GATE_MS = 0.5;
 
-const S = 0.1;
-
-/** N boxes in a grid of columns standing on the ground, 1 mm apart, so the pile is all contacts. */
-function pile(n: number): Scenario {
-  const side = Math.ceil(Math.sqrt(n / 10));
-  return {
-    name: `pile of ${n} boxes`,
-    bodies: n,
-    constraints: 0,
-    build() {
-      const world = createWorld({ dt: 1 / 1000, iterations: 4 });
-      world.addGround();
-      for (let i = 0; i < n; i++) {
-        const col = i % (side * side), layer = Math.floor(i / (side * side));
-        const x = (col % side) * (S + 0.001), z = Math.floor(col / side) * (S + 0.001);
-        world.addRobot(model(`b${i}`, [boxPart('b', [S, S, S], [0, 0, 0])]), {
-          position: [x, S / 2 + layer * (S + 0.001), z],
-          rotation: [0, 0, 0, 1],
-        });
-      }
-      return world;
-    },
-  };
-}
-
-/** Chains of 20 links joined by fixed joints, each hanging from a static anchor: n links in all. */
-function chains(n: number): Scenario {
-  const perChain = 20;
-  const count = Math.round(n / perChain);
-  return {
-    name: `${count} chains × ${perChain} fixed joints`,
-    bodies: count * perChain,
-    constraints: count * perChain,
-    build() {
-      const world = createWorld({ dt: 1 / 1000, iterations: 4 });
-      for (let c = 0; c < count; c++) {
-        const parts: PhysPart[] = [boxPart('anchor', [0.05, 0.05, 0.05], [0, 0, 0], { mass: 0 })];
-        const joints: Connection[] = [];
-        let prev = 'anchor';
-        for (let k = 0; k < perChain; k++) {
-          const id = `l${k}`;
-          // links run sideways, so the chain is a cantilever loaded in bending
-          parts.push(boxPart(id, [0.05, 0.02, 0.02], [0.05 * (k + 1), 0, 0], { mass: 0.2 }));
-          joints.push({ kind: 'joint', id: `j${k}`, joint: 'fixed', a: prev, b: id, anchor: [0.05 * k + 0.025, 0, 0] });
-          prev = id;
-        }
-        world.addRobot(model(`chain${c}`, parts, joints), { position: [0, 2, 0.1 * c], rotation: [0, 0, 0, 1] });
-      }
-      return world;
-    },
-  };
-}
-
-/**
- * A robot-like assembly: a 10 × 15 grid of small plates on the ground, each bolted to its eight
- * neighbours (275 edge bolts and 252 diagonal ones), with two robots side by side.
- */
-function robots(ground = true): Scenario {
-  const nx = 10, nz = 15, cell = 0.04;
-  const parts: PhysPart[] = [];
-  const conns: Connection[] = [];
-  const id = (i: number, k: number) => `p${i}_${k}`;
-  for (let i = 0; i < nx; i++) {
-    for (let k = 0; k < nz; k++) parts.push(boxPart(id(i, k), [cell, 0.01, cell], [i * cell, 0.005, k * cell], { mass: 0.15 }));
-  }
-  for (let i = 0; i < nx; i++) {
-    for (let k = 0; k < nz; k++) {
-      const links: [number, number][] = [[1, 0], [0, 1], [1, 1], [1, -1]];
-      for (const [di, dk] of links) {
-        const i2 = i + di, k2 = k + dk;
-        if (i2 < 0 || i2 >= nx || k2 < 0 || k2 >= nz) continue;
-        const at: [number, number, number] = [(i + i2) * cell / 2, 0.005, (k + k2) * cell / 2];
-        conns.push(bolt(`${id(i, k)}-${id(i2, k2)}`, id(i, k), id(i2, k2), at, [0, 1, 0]));
-      }
-    }
-  }
-  return {
-    name: ground ? 'two robots: 2 × 150 bolted plates on the ground' : 'the same two robots in free fall (no contacts)',
-    bodies: 2 * parts.length,
-    constraints: 2 * conns.length,
-    build() {
-      const world = createWorld({ dt: 1 / 1000, iterations: 4 });
-      if (ground) world.addGround();
-      world.addRobot(model('a', parts, conns), AT_ORIGIN);
-      world.addRobot(model('b', parts, conns), { position: [0.6, 0, 0], rotation: [0, 0, 0, 1] });
-      return world;
-    },
-  };
-}
-
-function measure(s: Scenario, warmup: number, steps: number): number {
-  const world = s.build();
+function measure(s: Scenario, backend: NonNullable<WorldOptions['backend']>, warmup: number, steps: number): number {
+  const world = s.build({ backend });
   for (let i = 0; i < warmup; i++) world.step();
   const t0 = performance.now();
   for (let i = 0; i < steps; i++) world.step();
@@ -125,8 +36,39 @@ const scenarios: [Scenario, number, number][] = [
   [chains(2000), 20, 100],
 ];
 
-console.log(`node ${process.version}, dt = 1 ms, 4 iterations`);
+await loadWasmSolver();
+console.log(`node ${process.version}, dt = 1 ms, 4 iterations, load average ${loadavg()[0]!.toFixed(1)} on ${availableParallelism()} cores`);
+console.log(`${'scenario'.padEnd(50)} bodies joints     ts ms/substep   wasm ms/substep  speed-up`);
 for (const [s, warmup, steps] of scenarios) {
-  const ms = measure(s, warmup, steps);
-  console.log(`${s.name.padEnd(50)} ${String(s.bodies).padStart(5)} bodies ${String(s.constraints).padStart(5)} joints  ${ms.toFixed(3).padStart(8)} ms/substep`);
+  const [ts, wasm] = BACKENDS.map((b) => measure(s, b, warmup, steps)) as [number, number];
+  console.log(
+    `${s.name.padEnd(50)} ${String(s.bodies).padStart(6)} ${String(s.constraints).padStart(6)} ${ts.toFixed(3).padStart(16)} ${wasm.toFixed(3).padStart(17)} ${(ts / wasm).toFixed(1).padStart(8)}x`,
+  );
 }
+
+// Gate S1. A single mean on one run moves with whatever else the machine is doing, so each gate
+// scenario is run GATE_RUNS times, alternating backends, and judged on the median.
+const GATE_RUNS = 7;
+const gates: { label: string; scenario: Scenario; warmup: number; steps: number }[] = [
+  { label: 'resting: two robots on the ground, substeps 200-1200', scenario: robots(), warmup: 200, steps: 1000 },
+  { label: 'dynamic: dropped from 10 cm, substeps 100-500', scenario: robots(true, 0.1), warmup: 100, steps: 400 },
+];
+
+const median = (xs: number[]): number => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]!;
+
+console.log(`\ngate S1: ${GATE_RUNS} runs per backend on fresh worlds, ms per substep`);
+console.log(`${'scenario'.padEnd(56)} backend    median       min       max`);
+const verdicts: string[] = [];
+for (const { label, scenario, warmup, steps } of gates) {
+  const runs: Record<string, number[]> = { ts: [], wasm: [] };
+  for (let r = 0; r < GATE_RUNS; r++) {
+    for (const b of BACKENDS) runs[b]!.push(measure(scenario, b, warmup, steps));
+  }
+  for (const b of BACKENDS) {
+    const t = runs[b]!;
+    console.log(`${(b === 'ts' ? label : '').padEnd(56)} ${b.padEnd(7)} ${median(t).toFixed(3).padStart(9)} ${Math.min(...t).toFixed(3).padStart(9)} ${Math.max(...t).toFixed(3).padStart(9)}`);
+  }
+  const m = median(runs.wasm!);
+  verdicts.push(`gate S1 ${label.split(':')[0]} (wasm median): ${m.toFixed(3)} ms per substep, target under ${GATE_MS} ms: ${m < GATE_MS ? 'met' : 'not met'}`);
+}
+console.log(`\n${verdicts.join('\n')}`);

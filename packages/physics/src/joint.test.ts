@@ -1,26 +1,15 @@
 import type { Connection, Quat } from '@botfoundry/model';
-import { describe, expect, it } from 'vitest';
-import { AT_ORIGIN, boxPart, model } from './fixtures.ts';
-import { createWorld } from './world.ts';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { AT_ORIGIN, BACKENDS, boxPart, model } from './fixtures.ts';
+import type { World, WorldOptions } from './index.ts';
+import { loadWasmSolver } from './wasm.ts';
+import { createWorld as create } from './world.ts';
 
 const G = 9.81;
 const aboutZ = (a: number): Quat => [0, 0, Math.sin(a / 2), Math.cos(a / 2)];
 
-/** A rod of length L hung from a static anchor by a joint at the origin, tilted by `tilt` about z. */
-function pendulum(joint: Connection, L: number, tilt: number, width = 0.02) {
-  const world = createWorld();
-  world.addRobot(
-    model('pendulum', [
-      boxPart('anchor', [0.05, 0.05, 0.05], [0, 0.025, 0], { mass: 0 }),
-      boxPart('rod', [width, L, width], [0, -L / 2, 0], { mass: 1 }),
-    ], [joint]),
-    { position: [0, 0, 0], rotation: aboutZ(tilt) },
-  );
-  return world;
-}
-
 /** Times (s) at which x crosses zero going negative, linearly interpolated within a substep. */
-function downCrossings(world: ReturnType<typeof createWorld>, steps: number, dt = 1e-3): number[] {
+function downCrossings(world: World, steps: number, dt = 1e-3): number[] {
   const crossings: number[] = [];
   let prev = world.bodies()[1]!.position[0];
   for (let i = 1; i <= steps; i++) {
@@ -36,7 +25,23 @@ const hinge = (limits?: [number, number]): Connection => ({
   kind: 'joint', id: 'h', joint: 'hinge', a: 'anchor', b: 'rod', anchor: [0, 0, 0], axis: [0, 0, 1], ...(limits ? { limits } : {}),
 });
 
-describe('joints', () => {
+describe.each(BACKENDS)('joints (%s backend)', (backend) => {
+  beforeAll(loadWasmSolver);
+  const createWorld = (options: WorldOptions = {}) => create({ ...options, backend });
+
+  /** A rod of length L hung from a static anchor by a joint at the origin, tilted by `tilt` about z. */
+  function pendulum(joint: Connection, L: number, tilt: number, width = 0.02) {
+    const world = createWorld();
+    world.addRobot(
+      model('pendulum', [
+        boxPart('anchor', [0.05, 0.05, 0.05], [0, 0.025, 0], { mass: 0 }),
+        boxPart('rod', [width, L, width], [0, -L / 2, 0], { mass: 1 }),
+      ], [joint]),
+      { position: [0, 0, 0], rotation: aboutZ(tilt) },
+    );
+    return world;
+  }
+
   it("a hinge pendulum's small-angle period is within 2 % of the compound-pendulum value", () => {
     const L = 0.5, w = 0.02;
     // T = 2π √(I_pivot / (m g d)): the rod's own inertia about the pivot, d = L/2
@@ -60,7 +65,7 @@ describe('joints', () => {
   it('a hinge limit stops the swing and holds the rod against the stop', () => {
     // released 0.3 rad from vertical; limits are measured from that pose, so the lower stop at
     // −0.1 rad holds the rod at 0.2 rad from vertical where it would otherwise swing to −0.3
-    const angle = (world: ReturnType<typeof createWorld>) => {
+    const angle = (world: World) => {
       const p = world.bodies()[1]!.position;
       return Math.atan2(p[0], -p[1]);
     };
