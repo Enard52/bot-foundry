@@ -12,23 +12,15 @@ Each step has a check that decides whether it's done. Numbers below are measured
 
 ## Next
 
-1. **Solver headroom.** Get the two-robot step comfortably under 0.5 ms. Ideas in order: solve paired bodies' systems in SIMD lanes (estimated about 0.42 ms), colour the body graph for wider lane groups, and move stepping into a Web Worker so the frame budget doesn't depend on the main thread.
-2. **Free-fall bug.** In the reference solver, a bolted assembly in pure free fall slowly spins up and bolts start breaking, on both backends. A freely falling rigid assembly should carry no load. Find out why before plastic hinges build on the same constraint code.
-3. **Plastic hinges.** Plates as cell lattices joined by yielding hinges with hardening and fracture. Check: a three-point bend and a drop-hammer dent within 15 % of reference force-displacement and absorbed energy.
-4. **Spinners.** Analytic rotors with gyroscopic and reaction torque, tooth-strike impulses, rotation-aware collision checks. Check: no pass-throughs in 1,000 randomized strikes at 250 rad/s, energy error under 2 %.
-5. **Electrical and control.** Battery, motor and speed-controller models, the control graph with PID, key and gamepad mapping. Check: spin-up time and current within 10 % of a published reference case.
-6. **Bolt behaviour.** Preload, friction slip before shear, and bending moment in the rating check.
-7. **Convex decomposition** of carved bodies for contact, instead of one hull per body.
-8. **The arena.** Wire the workshop's compiled robots into the solver, with drivers, an AI pilot and match rules.
+1. **Solver headroom.** Get the two-robot step comfortably under 0.5 ms. Ideas in order: solve paired bodies' systems in SIMD lanes (estimated about 0.42 ms), colour the body graph for wider lane groups, and move stepping into a Web Worker so the frame budget doesn't depend on the main thread. ([#21](https://github.com/myrgic/bot-foundry/issues/21))
+2. **Free-fall bug.** In the reference solver, a bolted assembly in pure free fall slowly spins up and bolts start breaking, on both backends. A freely falling rigid assembly should carry no load. Find out why before plastic hinges build on the same constraint code. ([#1](https://github.com/myrgic/bot-foundry/issues/1))
+3. **Plastic hinges.** Plates as cell lattices joined by yielding hinges with hardening and fracture. Check: a three-point bend and a drop-hammer dent within 15 % of reference force-displacement and absorbed energy. ([#22](https://github.com/myrgic/bot-foundry/issues/22))
+4. **Spinners.** Analytic rotors with gyroscopic and reaction torque, tooth-strike impulses, rotation-aware collision checks. Check: no pass-throughs in 1,000 randomized strikes at 250 rad/s, energy error under 2 %. ([#23](https://github.com/myrgic/bot-foundry/issues/23))
+5. **Electrical and control.** Battery, motor and speed-controller models, the control graph with PID, key and gamepad mapping. Check: spin-up time and current within 10 % of a published reference case. ([#24](https://github.com/myrgic/bot-foundry/issues/24))
+6. **Bolt behaviour.** Preload, friction slip before shear, and bending moment in the rating check. ([#25](https://github.com/myrgic/bot-foundry/issues/25))
+7. **Convex decomposition** of carved bodies for contact, instead of one hull per body. ([#26](https://github.com/myrgic/bot-foundry/issues/26))
+8. **The arena.** Wire the workshop's compiled robots into the solver, with drivers, an AI pilot and match rules. ([#27](https://github.com/myrgic/bot-foundry/issues/27))
 
-## Contract follow-ups
+## Issues
 
-Collected from building the first three packages:
-
-- Mark immovable parts explicitly in `PhysPart` instead of using zero mass.
-- Document the sign of a bolt's `axis`.
-- Report the bending moment a connection carries, so prying shows up in bolt tension.
-- Add a `warnings` list to the compiled model for things compile currently drops silently, like an actuator with no speed controller.
-- Give `ComponentDef` an optional material.
-- Decide whether a `Wire` is one conductor or a supply and return pair.
-- Export the kernel's plane and arc helpers so the sketcher and kernel share one implementation.
+Bugs, contract follow-ups and smaller gaps live in the [issue tracker](https://github.com/myrgic/bot-foundry/issues). Each one says what's wrong, how to reproduce it, and the check a fix has to pass. The [`good first issue`](https://github.com/myrgic/bot-foundry/issues?q=is%3Aopen+label%3A%22good+first+issue%22) label marks small, self-contained ones, and [`contract`](https://github.com/myrgic/bot-foundry/issues?q=is%3Aopen+label%3Acontract) marks changes to the CAD and physics contract.

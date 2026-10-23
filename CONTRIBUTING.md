@@ -21,4 +21,4 @@ pnpm dev
 
 ## Good first areas
 
-Check [docs/ROADMAP.md](docs/ROADMAP.md). The contract follow-ups at the bottom are small and self-contained.
+Look for issues labelled [`good first issue`](https://github.com/myrgic/bot-foundry/issues?q=is%3Aopen+label%3A%22good+first+issue%22). Every issue states the check a fix has to pass, so put that check in your pull request.
