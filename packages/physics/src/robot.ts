@@ -43,6 +43,10 @@ function requireFinite(what: string, values: readonly number[]): void {
 export function buildRobot(model: PhysicalModel, pose: Transform, robotId: string, firstIndex: number, params: SolverParams): BuiltRobot {
   requireFinite('the pose position', pose.position);
   requireFinite('the pose rotation', pose.rotation);
+  // a finite but zero-length quaternion normalizes to a degenerate identity/NaN state: refuse it
+  const rotLenSq =
+    pose.rotation[0]! ** 2 + pose.rotation[1]! ** 2 + pose.rotation[2]! ** 2 + pose.rotation[3]! ** 2;
+  if (rotLenSq < 1e-18) throw new Error(`the pose rotation must have length at least 1e-9, got ${Math.sqrt(rotLenSq)}`);
   for (const part of model.parts) {
     requireFinite(`part ${part.id}: mass`, [part.mass.mass]);
     requireFinite(`part ${part.id}: inertia`, part.mass.inertia);
