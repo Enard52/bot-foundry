@@ -1,4 +1,5 @@
 // All geometry is plain JSON in SI units (metres, radians).
+// Design frame: y is up (the arena floor is y = 0), x points forward, z points to the robot's right.
 
 export type Id = string;
 export type V2 = readonly [number, number];
@@ -45,7 +46,10 @@ export interface Profile {
   holes: Loop[];
 }
 
-/** Symmetric 3x3 inertia tensor [Ixx, Iyy, Izz, Ixy, Ixz, Iyz] in kg·m². */
+/**
+ * Symmetric 3x3 inertia tensor [Ixx, Iyy, Izz, Ixy, Ixz, Iyz] in kg·m². The off-diagonal entries are
+ * tensor entries (the negated products of inertia), so the matrix is [[Ixx, Ixy, Ixz], [Ixy, Iyy, Iyz], [Ixz, Iyz, Izz]].
+ */
 export type Sym3 = readonly [number, number, number, number, number, number];
 
 export interface MassProperties {
