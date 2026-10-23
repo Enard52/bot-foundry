@@ -1,0 +1,22 @@
+{
+  "name": "bot-foundry",
+  "private": true,
+  "description": "Design combat robots in a real CAD workshop and fight them with real physics.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@10.8.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @botfoundry/workshop dev",
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "typecheck": "tsc -b",
+    "bench": "pnpm -r --if-present bench"
+  },
+  "devDependencies": {
+    "typescript": "~5.9",
+    "vitest": "^3"
+  }
+}

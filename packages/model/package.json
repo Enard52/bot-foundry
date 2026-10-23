@@ -1,0 +1,11 @@
+{
+  "name": "@botfoundry/model",
+  "version": "0.0.0",
+  "description": "Shared schema: robot designs, materials, fastener ratings, and the compiled physical model.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "build": "tsc -b" }
+}
